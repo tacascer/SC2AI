@@ -5,6 +5,9 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.constants import *
 from sc2.data import race_townhalls
 
+import random
+
+
 class MacroBot(sc2.BotAI):
     async def on_step(self, iteration):
         await self.distribute_workers()
@@ -14,6 +17,7 @@ class MacroBot(sc2.BotAI):
         await self.build_assimilator()
         await self.offensive_force_buildings()
         await self.build_offensive_force()
+        await self.attack()
 
     async def build_workers(self):
         for nexus in self.townhalls.ready.idle:
@@ -46,11 +50,12 @@ class MacroBot(sc2.BotAI):
     async def offensive_force_buildings(self):
         if self.units(UnitTypeId.PYLON).ready.exists:
             pylon = self.units(UnitTypeId.PYLON).ready.random
-            if self.units(UnitTypeId.GATEWAY).ready.exists:
-                if not self.units(UnitTypeId.CYBERNETICSCORE).exists:
-                    if self.can_afford(UnitTypeId.CYBERNETICSCORE) and not self.already_pending(UnitTypeId.CYBERNETICSCORE):
-                        await self.build(UnitTypeId.CYBERNETICSCORE, near=pylon)
-            else:
+
+            if self.units(UnitTypeId.GATEWAY).ready.exists and not self.units(UnitTypeId.CYBERNETICSCORE):
+                if self.can_afford(UnitTypeId.CYBERNETICSCORE) and not self.already_pending(UnitTypeId.CYBERNETICSCORE):
+                    await self.build(UnitTypeId.CYBERNETICSCORE, near=pylon)
+
+            elif len(self.units(UnitTypeId.GATEWAY)) < 3:
                 if self.can_afford(UnitTypeId.GATEWAY) and not self.already_pending(UnitTypeId.GATEWAY):
                     await self.build(UnitTypeId.GATEWAY, near=pylon)
 
@@ -58,6 +63,24 @@ class MacroBot(sc2.BotAI):
         for gw in self.units(UnitTypeId.GATEWAY).ready.idle:
             if self.can_afford(UnitTypeId.STALKER) and self.supply_left > 0:
                 await self.do(gw.train(UnitTypeId.STALKER))
+
+    def find_target(self, state):
+        if len(self.known_enemy_units) > 0:
+            return random.choice(self.known_enemy_units)
+        elif len(self.known_enemy_structures) > 0:
+            return random.choice(self.known_enemy_structures)
+        else:
+            return self.enemy_start_locations[0]
+
+    async def attack(self):
+        if self.units(UnitTypeId.STALKER).amount > 15:
+            for s in (self.units(UnitTypeId.STALKER)).idle:
+                await self.do(s.attack(self.find_target(self.state)))
+
+        if self.units(UnitTypeId.STALKER).amount > 3:
+            if len(self.known_enemy_units) > 0:
+                for s in (self.units(UnitTypeId.STALKER)).idle:
+                    await self.do(s.attack(random.choice(self.known_enemy_units)))
 
 
 run_game(maps.get("TritonLE"), [
